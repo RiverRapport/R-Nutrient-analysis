@@ -1,5 +1,5 @@
 ---
-title: "Nutrients"
+title: "Nutrient Indicator - Great River Rapport"
 author: "Erin Smith"
 date: "2023-02-28"
 output:
@@ -10,11 +10,9 @@ output:
 library(knitr)
 opts_chunk$set(tidy.opts=list(width.cutoff=80),tidy=TRUE)
 ```
-#River Rapport - Nutrients - Technical Report
+## Load packages and prep data
 
-###Load packages and prep data
-Packages required
-```{r Load Packages, warning=FALSE}
+```{r Load Packages, warning=FALSE, error=FALSE,tidy=TRUE,message=FALSE}
 library(Kendall)
 library(corrplot)
 library(trend)
@@ -48,20 +46,15 @@ library(formatR)
 library(FSA)
 ```
 
-Load dataframes and format data
-```{r Load and prepare data}
+##Load dataframes and format data
+```{r Load and prepare data, warning=F,message=F}
 GN<-read.csv("Gov_nut_data_depth.csv",header=TRUE)
-head(GN)
 
 AD<-read.csv("Ac_nut_data_depth.csv",header=TRUE)
-head(AD)
 
 clim<-read.csv("Monthly_climate_USLR_1960.2022.csv",header=TRUE)
 clim$River_section <- factor(clim$River_section , levels=c("TI", "BR", "LSL", "CA","LSF"))
-head(clim)
-```
-Combine data sets
-```{r Combine dataframes}
+
 Ac_gov <- rbind(GN, AD)
 Ac_gov$Sample_date <- as.Date(Ac_gov$Sample_date, "%Y-%m-%d")
 Ac_gov$River_section <-
@@ -118,8 +111,8 @@ GLIP_Ann <- GLIP_USGS %>%
 
 write.csv(GLIP_Ann, "TP_TI.BR.CA_Annual.csv", row.names = F)
 ```
-
-```{r Correlation matrix}
+## Nutrient species Correlation Matrix
+```{r Correlation matrix, message=F}
 res <-
   cor(Nut_precip[, c(15, 16, 18, 23, 24, 20)], use = 'pairwise.complete.obs')
 corrplot(
@@ -151,14 +144,15 @@ Avg <- Nut_precip %>%
     TNx = mean(TN, na.rm = TRUE),
     TNsd = sd(TN, na.rm = TRUE)
   )
-print(Avg)
+write.csv(Avg, "Avg_TP_USLR.csv", row.names = F)
 ```
 
 
-###Kruskal Wallis on factors
+### Exploratory analysis  By Depth
 
-```{r Kruskal Wallis for depth}
+```{r Kruskal Wallis for depth,warning=F}
 TP_aov<-aov(TP~NS_MC,data=Nut_precip)
+par(mfrow=c(2,2))
 plot(TP_aov)
 
 kruskal.test(TN~NS_MC,data=Nut_precip)
@@ -171,14 +165,19 @@ group_by(Nut_precip, NS_MC) %>%
     medianSRP = median(SRP, na.rm = TRUE)
   )
 
-p1<-ggplot(data=Nut_precip,aes(NS_MC,TN,fill=NS_MC))+geom_boxplot()+
-  xlab("Depth")+
+p1 <- ggplot(data = Nut_precip, aes(NS_MC, TN, fill = NS_MC)) + geom_boxplot() +
+  xlab("Depth") +
   ylab("TN (mg*L-1)") +
-  scale_fill_viridis(discrete=TRUE)+
-  scale_x_discrete(labels = c('Main Channel','Nearshore'))+
-  theme(axis.title = element_text(size=15),panel.background = element_rect(fill="white"),axis.text = element_text(size=12),legend.position = "none")+
-  geom_signif(comparisons = list(c("MC", "NS")), 
-              map_signif_level=TRUE)
+  scale_fill_viridis(discrete = TRUE) +
+  scale_x_discrete(labels = c('Main Channel', 'Nearshore')) +
+  theme(
+    axis.title = element_text(size = 15),
+    panel.background = element_rect(fill = "white"),
+    axis.text = element_text(size = 12),
+    legend.position = "none"
+  ) +
+  geom_signif(comparisons = list(c("MC", "NS")),
+              map_signif_level = TRUE)
 p1
 ggsave("TN_depth_boxplot.svg",p1,dpi=600,width=10,height=8)
 
@@ -193,10 +192,11 @@ p2<-ggplot(data=Nut_precip,aes(NS_MC,TP,fill=NS_MC))+geom_boxplot()+
 p2
 ggsave("TP_depth_boxplot.svg",p2,dpi=600,width=10,height=8)
 ```
+Kruskal Wallis by River Section
 
-
-```{r Kruskal Wallis for river section}
+```{r Kruskal Wallis for river section, warning=F}
 TP_aov<-aov(TP~River_section,data=Nut_precip)
+par(mfrow=c(2,2))
 plot(TP_aov)
 
 TP_RS<-kruskal.test(TP~River_section,data=Nut_precip)
@@ -223,17 +223,9 @@ p2
 
 ## Mann Kendall time series analysis
 
-```{r Check linear model residuals for autocorrelation by dataset}
-par(mar=c(3,3,3,0),mfrow=c(2,2))
-datasets<-unique(Nut_precip$Data_source)
-for (source in datasets) {
-  mod<-lm(TP~year,data=subset(Nut_precip,Data_source==source))
-acf(resid(mod),plot=T,main = paste("ACF Data_source", source),lag.max=35)
-pacf(resid(mod),plot=T,main = paste("pACF Data_source", source),lag.max=35)
-}
-```
-###Phosphorus 
-```{r Seasonal Mann Kendall}
+### Phosphorus 
+
+```{r Seasonal Mann Kendall, warning=F, message=F}
 Seas_Nut<-Nut_precip %>%
   filter(year<2021)  %>%
   group_by(year,season) %>% 
@@ -247,7 +239,7 @@ Seas_Nut<-Nut_precip %>%
     )
 
 mod_raw<-lm(TP~year,data=Seas_Nut)
-par(mar=c(3,3,3,0),mfrow=c(2,2))
+par(mar=c(3,3,3,0),mfrow=c(1,2))
 acf(resid(mod_raw),plot=T,main = paste("ACF Data_source"),lag.max=35)
 pacf(resid(mod_raw),plot=T,main = paste("pACF Data_source"),lag.max=35)
 
@@ -266,9 +258,9 @@ write.table(SMKresultsP,"Seasonal Mann Kendall_P.txt",sep="\t")
 SMKresultsP
 ```
 
-#pscore test for breakpoints
-```{r Check for Breakpoints}
+#### pscore test for breakpoints
 
+```{r Check for Breakpoints}
 icefree <- Nut_precip %>%
   filter(month > 4 & month < 11) %>%
   group_by(year) %>%
@@ -321,9 +313,9 @@ for (parameter in c("TP", "SRP")) {
 }
 ```
 
-###Plot temporal P trends
-LOESS plot of annual values
-```{r N:P temporal plot}
+### Plot temporal N:P trend  
+
+```{r N:P temporal plot, message=F, warning=F}
 Annual_nut<-Nut_precip%>%
   group_by(year, River_section)%>%
   summarise(TP=mean(TP,na.rm=TRUE),
@@ -340,11 +332,6 @@ NP<-ggplot(Annual_nut, aes(year,NP)) +
   theme_bw()
 NP
 ggsave("Plots/NP_Ratio_SLR.svg",NP,dpi=600,height=8,width=10)
-
-mod_raw<-lm(NP~year,data=Annual_nut)
-par(mfrow=c(1,2))
-acf(resid(mod_raw),plot=T,main = paste("ACF Data_source"),lag.max=35)
-pacf(resid(mod_raw),plot=T,main = paste("pACF Data_source"),lag.max=35)
 
 NP_MK<-kendallTrendTest(NP~year,data=Annual_nut,na.action=na.pass,alternative="two.sided")
 NP_MK$p.value
@@ -373,8 +360,6 @@ par(mfrow=c(1,2))
 acf(resid(NP_gam), lag.max = 36, main = "ACF")
 pacf(resid(NP_gam), lag.max = 36, main = "pACF")
 summary(NP_gam)
-
-draw(NP_gam,select=1,residuals=FALSE)& theme_bw()
 
 m2.d <- derivatives(NP_gam,term="s(year)",n=200)
 m2.d<-m2.d%>%
@@ -405,9 +390,8 @@ TP_year_plot<-ggplot(sm_year, aes(x=year,y=est))+
 TP_year_plot
 ```
 
-###Nitrogen Mann Kendall
+### Nitrogen Mann Kendall  
 
-Seasonal Mann Kendall for NH3/4, NO2/3, and TN
 ```{r Seasonal Mann Kendall for N}
 SMKresultsN<-NULL
 for(parameter in c("TN","NO2.3","NH3.4")){
@@ -424,7 +408,7 @@ write.table(SMKresultsN,"Seasonal Mann Kendall_N.txt",sep="\t")
 SMKresultsN
 ```
 
-pscore test to test for breakpoints
+### pscore test to test for breakpoints
 ```{r N breakpoints}
 for (parameter in c("TN", "NO2.3", "NH3.4")) {
   y <- icefree[[parameter]]
@@ -466,9 +450,10 @@ for (parameter in c("TN", "NO2.3", "NH3.4")) {
 }
 ```
 
-###Plot temporal N trends
-LOESS N trends
-```{r Seasonal N plots}
+### Plot temporal N trends
+
+```{r Seasonal N plots, warning=F,message=F}
+par(mfrow=c(1,3))
   for (parameter in c("TN","NO2.3","NH3.4")) {
 print(ggplot(icefree, aes(year,icefree[[parameter]])) +
   geom_point() +
@@ -479,42 +464,30 @@ print(ggplot(icefree, aes(year,icefree[[parameter]])) +
     }
 ```
 
-##Let's Try GAMS
+## Let's Try GAMs
 
-Data exploration
-Histograms for each parameter
-```{r Data exploration for GAMs}
-for (parameter in c("TDP","TP","NH3.4","NO2.3","TN")) {
+Data exploration  
+
+```{r Data exploration for GAMs, warning=F, message=F}
+
+for (parameter in c("TP","TN")) {
   hist(Nut_precip[[parameter]],main = paste("Histogram of" , parameter),xlab = parameter)
 }
 #all parameters left skewed
-for (parameter in c("TDP","TP","NH3.4","NO2.3","TN")) {
-#relationship exploration
+for (parameter in c("TP","TN")) {
 print(ggplot(Nut_precip,aes(x=year,y=Nut_precip[[parameter]]))+geom_point()+
   ylab(parameter) )
 print(ggplot(Nut_precip,aes(x=NS_MC,y=Nut_precip[[parameter]]))+geom_point()+
-  ylab(parameter) )
-print(ggplot(Nut_precip,aes(x=Total_Precip,y=Nut_precip[[parameter]]))+geom_point()+
   ylab(parameter) )
 }
 #Both year and river section need to be included in our model
 ```
 
-Need to deal with autocorrelation
-```{r Subset and autocorrelation checks}
+### Need to deal with autocorrelation
+```{r Subset and autocorrelation checks,warning=F,message=F}
 #try models for different subsets of the data
 spring<-Nut_precip %>%  
   filter(season=="spring")
-
-#spring_ag <- spring %>%                                   # Count non-NA values by group
-#  group_by(Site,year,month,Longitude,Latitude,River_section,NS_MC,Total_Precip) %>%
-#  dplyr::summarize(TPobs = sum(!is.na(TP),na.rm=TRUE),
-#                   sd_TP = sd(TP, na.rm=TRUE),
-#                   TP = mean(TP,na.rm=TRUE),
-#                   TNobs = sum(!is.na(TN),na.rm=TRUE),
-#                   sd_TN = sd(TN, na.rm=TRUE),
-#                   TN = mean(TN,na.rm=TRUE)
-#                    )
 
 #check on basic model
 M <- list(c(1, 0.5), NA)
@@ -530,7 +503,7 @@ TPM1<-gam(TP ~ s(year,m=2)+s(year,by=River_section,m=1)+ s(River_section,bs='re'
           family=tw(link="log"))
 k.check(TPM1)
 appraise(TPM1)
-par(mar=c(3,3,3,0),mfrow=c(2,2))
+par(mfrow=c(1,2))
 acf(resid(TPM1), lag.max = 36, main = "ACF")
 pacf(resid(TPM1), lag.max = 36, main = "pACF")
 summary(TPM1)
@@ -569,138 +542,121 @@ TPM1_ARMA<-gamm(TP ~ s(year,k=10, bs="tp")+ s(year,River_section,bs='fs')+ s(Riv
           family='tw')
 
 appraise(TPM1_ARMA$gam)
-layout(matrix(1:2, ncol = 2))
-res <- resid(TPM1_ARMA$lme, type = "normalized")  #need to do on normalized resid
+par(mfrow=c(1,2))
+res <- resid(TPM1_ARMA$lme, type = "normalized")
 acf(res, lag.max = 36, main = "ACF - AR(1) errors")
 pacf(res, lag.max = 36, main = "pACF- AR(1) errors")
-layout(1)
 
-anova(TPM1_ARMA0$lme,TPM1_ARMA$lme)
+#ACF is worse with autocorrelation terms - use original model
 ```
 
 
-###TP GAMs
-```{r TP GAM building}
-#factor-smooth interaction of year with river section
-TPGI<-gam(TP ~ s(year,m=2) + s(year,by=River_section,m=1)+ s(River_section,bs='re')+
-            s(Data_source,bs='re')+
+### Build TP GAM model
+
+```{r TP GAM building, warning =F,message=F}
+TPBM<-gam(TP ~ s(year,m=2) + s(year,by=River_section,m=1)+ s(River_section,bs='re')+
             s(DOY,bs="tp")+
             s(NS_MC,bs='re')+
             s(Longitude, Latitude,bs="ds",m=c(1,.5),k=20)+
-            ti(year,DOY,bs='tp',k=20)+
+            s(Data_source,bs='re'),
+              data=spring,method="REML",
+          family=tw(link="log"))
+gam.check(TPBM)
+
+TPM1<-gam(TP ~ s(year,m=2) + s(year,by=River_section,m=1)+ s(River_section,bs='re')+
+            s(DOY,bs="tp")+
+            s(NS_MC,bs='re')+
+            s(Longitude, Latitude,bs="ds",m=c(1,.5),k=20)+
+            s(Data_source,bs='re')+
+            ti(Longitude,Latitude,year,d=c(2,1),bs=c('ds','tp'),m = list(c(1, 0.5)),k=20),
+              data=spring,method="REML",
+          family=tw(link="log"))
+gam.check(TPM1)
+
+TPM2<-gam(TP ~ s(year,m=2) + s(year,by=River_section,m=1)+ s(River_section,bs='re')+
+            s(DOY,bs="tp")+
+            s(NS_MC,bs='re')+
+            s(Longitude, Latitude,bs="ds",m=c(1,.5),k=20)+
+            s(Data_source,bs='re')+
             ti(Longitude,Latitude,year,d=c(2,1),bs=c('ds','tp'),m = list(c(1, 0.5)),k=20)+
             ti(Longitude,Latitude,DOY,d=c(2,1),bs=c('ds','tp'),m = list(c(1, 0.5)),k=20),
               data=spring,method="REML",
           family=tw(link="log"))
-gam.check(TPGI)
+gam.check(TPM2)
 
-TPG_1<-gam(TP ~ s(year,bs='tp') +
-            s(Data_source,bs='re')+
+TPM3<-gam(TP ~ s(year,m=2) + s(year,by=River_section,m=1)+ s(River_section,bs='re')+
             s(DOY,bs="tp")+
-            ti(year,DOY,bs='tp',k=20)+
+            s(NS_MC,bs='re')+
             s(Longitude, Latitude,bs="ds",m=c(1,.5),k=20)+
-            ti(Longitude,Latitude,year,d=c(2,1),bs=c('ds','tp'),m = list(c(1, 0.5)))+
-            ti(Longitude,Latitude,DOY,d=c(2,1),bs=c('ds','tp'),m = list(c(1, 0.5)))+
-            s(NS_MC,bs='re'),
+            s(Data_source,bs='re')+
+            ti(Longitude,Latitude,year,d=c(2,1),bs=c('ds','tp'),m = list(c(1, 0.5)),k=20)+
+            ti(Longitude,Latitude,DOY,d=c(2,1),bs=c('ds','tp'),m = list(c(1, 0.5)),k=20)+
+            ti(year,DOY,bs='tp',k=20),
               data=spring,method="REML",
           family=tw(link="log"))
+gam.check(TPM3)
 
-#adding long and lat accounts for spatial structure of the data
-TPGS<-gam(TP ~ s(year,m=2)+s(year,River_section,bs="fs",m=2)+
-            s(Data_source,bs='re')+
+TPM4<-gam(TP ~ s(year,m=2) + s(year,by=River_section,m=1)+ s(River_section,bs='re')+
             s(DOY,bs="tp")+
-            ti(year,DOY,bs='tp',m=c(1,0.5))+
-            s(Longitude, Latitude,bs="ds",m=c(1,.5),k=10)+
-            ti(Longitude,Latitude,year,d=c(2,1),bs=c('ds','tp'),m = list(c(1, 0.5)))+
-            ti(Longitude,Latitude,DOY,d=c(2,1),bs=c('ds','tp'),m = list(c(1, 0.5)))+
-            s(NS_MC,bs='re'),
-              data=spring,method="REML",
-          family=tw(link="log"))
-gam.check(TPGS)
-
-TPS<-gam(TP ~ s(year,River_section,bs="fs",m=2)+
+            s(NS_MC,bs='re')+
+            s(Longitude, Latitude,bs="ds",m=c(1,.5),k=20)+
             s(Data_source,bs='re')+
-            s(DOY,bs="tp")+
-            ti(year,DOY,bs='tp',m=c(1,0.5))+
-            s(Longitude, Latitude,bs="ds",m=c(1,.5),k=10)+
-            ti(Longitude,Latitude,year,d=c(2,1),bs=c('ds','tp'),m=c(1,0.5))+
-            ti(Longitude,Latitude,DOY,d=c(2,1),bs=c('ds','tp'),m=c(1,0.5))+
-            s(NS_MC,bs='re'),
-              data=spring,method="REML",
-          family=tw(link="log"))
-gam.check(TPS)
-
-TPI<-gam(TP ~ s(year,by=River_section,m=2)+ s(River_section,bs='re')+
-            s(Data_source,bs='re')+
-            s(DOY,bs="tp")+
+            ti(Longitude,Latitude,year,d=c(2,1),bs=c('ds','tp'),m = list(c(1, 0.5)),k=20)+
+            ti(Longitude,Latitude,DOY,d=c(2,1),bs=c('ds','tp'),m = list(c(1, 0.5)),k=20)+
             ti(year,DOY,bs='tp',k=20)+
-            s(Longitude, Latitude,bs="ds",m=c(1,.5),k=50)+
-            ti(Longitude,Latitude,year,d=c(2,1),bs=c('ds','tp'),m = list(c(1, 0.5)))+
-            ti(Longitude,Latitude,DOY,d=c(2,1),bs=c('ds','tp'),m = list(c(1, 0.5)))+
-            s(NS_MC,bs='re'),
-             data=spring,method="REML",family=tw(link="log"))
-
-gam.check(TPI)
-TPI_1<-gam(TP ~ s(year,by=River_section,m=2)+ s(River_section,bs='re')+
-            s(Data_source,bs='re')+
-            s(DOY,bs="tp")+
-            s(Longitude, Latitude,bs="ds",m=c(1,.5),k=10)+
-            s(NS_MC,bs='re'),
+            s(Total_Precip,bs="tp",k=10),
               data=spring,method="REML",
           family=tw(link="log"))
+gam.check(TPM4)
 
 #compare models
-AIC(TPGI,TPGS,TPS,TPI,TPI_1)
-summary(TPGI)
+AIC(TPBM,TPM1,TPM2,TPM3,TPM4)
+summary(TPM3)
 ```
 
 
 TP GAM model checking
 ```{r TP GAM checking}
 #Basic diagnostics:
-k.check(TPGI)
-appraise(TPGI)
+k.check(TPM3)
+appraise(TPM3)
 
 #Autocorrelation check:
-par(mar=c(3,3,3,0),mfrow=c(2,2))
-acf(resid(TPGI), lag.max = 36, main = "ACF")
-pacf(resid(TPGI), lag.max = 36, main = "pACF")
+par(mar=c(3,3,3,0),mfrow=c(1,2))
+acf(resid(TPM3), lag.max = 36, main = "ACF")
+pacf(resid(TPM3), lag.max = 36, main = "pACF")
 
 #concurvity check:
-concurvity(TPGI,full=TRUE)#if any of the values at worst are higher than 0.8, you want to look at full=FALSE as well.
-concurvity(TPGI,full=FALSE)#Look for the worst-case scenario and see if variables with high values have problematic shapes or confidence intervals.
+concurvity(TPM3,full=TRUE)#if any of the values at worst are higher than 0.8
 ```
 
-Plot TP GAM using gratia
-```{r TP GAM plots}
-#Year partial effects at each river section
-draw(TPGI, select = c(1:6), residuals = FALSE) & theme_bw()
+### Plot TP GAM using gratia
+```{r Gratia TP GAM plots}
+#First look at year partial effects for each river section
+draw(TPM3, select = c(1:6), residuals = FALSE) & theme_bw()
 
 #Year partial effects with long + lat
-draw(
-  TPGI,
-  select = 6,
-  residuals = FALSE,
+draw(TPM3,  select = 10,  residuals = FALSE,
   continuous_fill = ggplot2::scale_fill_distiller(palette = "PuOr", type = "div")
 )
-draw(
-  TPGI,
-  select = 13,
-  residuals = TRUE,
+draw(TPM3,  select = 11,  residuals = TRUE,
   continuous_fill = ggplot2::scale_fill_distiller(
     palette = "PuOr",
     type = "div",
     na.value = 'transparent'
   )
 )
+```
 
+### Let's customize the plots
+```{r TP GAM plots}
 #customized partial effect plots
-m2.d <- derivatives(TPGI, term = "s(year)", n = 200)
+m2.d <- derivatives(TPM3, term = "s(year)", n = 200)
 m2.d <- m2.d %>%
   mutate(change = ifelse(upper < 0, "dec",
                          if_else(lower > 0, "inc", "")))
 
-sm_year <- smooth_estimates(TPGI, smooth = "s(year)", dist = 0.05)
+sm_year <- smooth_estimates(TPM3, smooth = "s(year)", dist = 0.05)
 sm_year$upper <- sm_year$est + 1.96 * sm_year$se
 sm_year$lower <- sm_year$est - 1.96 * sm_year$se
 
@@ -722,14 +678,14 @@ TP_year_plot
 ggsave("TP_year_plot.svg",TP_year_plot,width=12,height=8,dpi=600)
 
 sm_year_TI <-
-  smooth_estimates(TPGI, smooth = "s(year):River_sectionTI")
+  smooth_estimates(TPM3, smooth = "s(year):River_sectionTI")
 sm_year_TI$upper <- sm_year_TI$est + 1.96 * sm_year_TI$se
 sm_year_TI$lower <- sm_year_TI$est - 1.96 * sm_year_TI$se
 
 sm_year_TI <- sm_year_TI %>%
   mutate(sig = ifelse(upper < 0 | lower > 0, "sig", "ns"))
 
-d_tp_TI <- derivatives(TPGI, term = "s(year):River_sectionTI", n = 200)
+d_tp_TI <- derivatives(TPM3, term = "s(year):River_sectionTI", n = 200)
 d_tp_TI <- d_tp_TI %>%
   mutate(change = ifelse(upper < 0, "dec",
                          if_else(lower > 0, "inc", "")))
@@ -767,14 +723,14 @@ p_year_TI <- ggplot(sm_year_TI, aes(x = year, y = est)) +
   theme(legend.position = "none",
         axis.title.x = element_blank())
 
-sm_year_BR <- smooth_estimates(TPGI, smooth = "s(year):River_sectionBR")
+sm_year_BR <- smooth_estimates(TPM3, smooth = "s(year):River_sectionBR")
 sm_year_BR$upper<-sm_year_BR$est+1.96*sm_year_BR$se
 sm_year_BR$lower<-sm_year_BR$est-1.96*sm_year_BR$se
 
 sm_year_BR<-sm_year_BR%>%
   mutate(sig=ifelse(upper<0|lower>0,"sig","ns"))
 
-d_tp_BR <- derivatives(TPGI,term="s(year):River_sectionBR",n=200)
+d_tp_BR <- derivatives(TPM3,term="s(year):River_sectionBR",n=200)
 d_tp_BR<-d_tp_BR%>%
   mutate(change=ifelse(upper<0,"dec",
                     if_else(lower>0,"inc","")
@@ -800,7 +756,7 @@ ggarrange(p_year_TI,p_year_BR,labels=c("A","B"),nrow=2,vjust=0.2)+
   theme(plot.margin = margin(10,1,1,1))
 
 sm <-
-  smooth_estimates(TPGI, smooth = "s(Longitude,Latitude)", dist = 0.05)
+  smooth_estimates(TPM3, smooth = "s(Longitude,Latitude)", dist = 0.05)
 #ggplot(sm, aes(x = Longitude, y = Latitude)) +
 #  geom_raster(aes(fill = est)) +
 #  geom_point(data = spring, alpha = 0.2) + # add a point layer for original data
@@ -812,9 +768,10 @@ sm1 <- as.data.frame(sm[, c(6:7, 4)])
 dfr <- rasterFromXYZ(sm1, crs = "+datum=WGS84")
 plot(dfr)
 writeRaster(dfr, 'TP_GAM.tif', overwrite = TRUE)
+#We will visualize the background in GIS software
 ```
 
-###TN GAMs
+## TN GAMs
 ```{r TN GAM model building}
 #Try base model
 TNM1 <-
@@ -823,15 +780,8 @@ TNM1 <-
       s(River_section, bs = 're') +
       s(Data_source, bs = 're') +
       s(DOY, bs = "tp") +
-      s(
-        Longitude,
-        Latitude,
-        bs = "ds",
-        m = c(1, .5),
-        k = 10
-      ) +
-      s(NS_MC, bs = 're') +
-      s(Total_Precip, k = 15),
+      s(Longitude,Latitude,bs = "ds", m = c(1, .5), k = 10) +
+      s(NS_MC, bs = 're'),
     data = spring,
     method = "REML",
     family = tw(link = "log")
@@ -898,86 +848,46 @@ anova(TNM1_ARMA0$lme, TNM1_AR1$lme)
 
 ```{r TN GAM building}
 #factor-smooth interaction of year with river section
-TNM1 <-
-  gam(
-    TN ~ s(year, k = 10, m = 2, bs = "tp") + s(year, by = River_section, m = 1)+
+TNBM <-  gam(TN ~ s(year, k = 10, m = 2, bs = "tp") + s(year, by = River_section, m = 1)+
       s(River_section, bs = 're') +
-      s(Data_source, bs = 're') +
-      s(DOY, bs = "tp") +
+      s(DOY, bs = "tp")+
+      s(NS_MC, bs = 're') +
       s(Longitude,Latitude,bs = "ds",m = c(1, .5),k = 10) +
-      s(NS_MC, bs = 're'),
+      s(Data_source, bs = 're'),
     data = spring,
     method = "REML",
     family = tw(link = "log")
   )
-gam.check(TNM1)
+gam.check(TNBM)
 
-#adding long and lat accounts for spatial structure of the data
-TNM2 <-
-  gam(
-    TN ~ s(year, k = 10, m = 2, bs = "tp") + s(year, by = River_section, m =1) +
+TNM1 <-  gam(TN ~ s(year, k = 10, m = 2, bs = "tp") + s(year, by = River_section, m = 1)+
       s(River_section, bs = 're') +
-      s(Data_source, bs = 're') +
-      s(DOY, bs = "tp") +
-      s(Longitude,Latitude,bs = "ds", m = c(1, .5), k = 10) +
+      s(DOY, bs = "tp")+
       s(NS_MC, bs = 're') +
+      s(Longitude,Latitude,bs = "ds",m = c(1, .5),k = 10) +
+      s(Data_source, bs = 're')+
       s(Total_Precip),
     data = spring,
     method = "REML",
-    family = tw(link = "log")
-  )
+    family = tw(link = "log"))
+
+gam.check(TNM1)
+
+TNM2 <- gam(TN ~ s(year, k = 10, m = 2, bs = "tp") + s(year, by = River_section, m = 1)+
+      s(River_section, bs = 're') +
+      s(DOY, bs = "tp")+
+      s(NS_MC, bs = 're') +
+      s(Longitude,Latitude,bs = "ds",m = c(1, .5),k = 10) +
+      s(Data_source, bs = 're') +
+      s(Total_Precip)+
+      ti(year,DOY,bs='tp'),
+  data = spring,
+  method = "REML",
+  family = tw(link = "log"))
 gam.check(TNM2)
 
-TN_GS <- gam(
-  TN ~ s(year, m = 2) + s(year, River_section, bs = "fs", m = 2) +
-    s(Data_source, bs = 're') +
-    s(DOY, bs = "tp") +
-    s(Longitude,Latitude, bs = "ds",m = c(1, .5), k = 10) +
-    s(NS_MC, bs = 're') +
-    s(Total_Precip),
-  data = spring,
-  method = "REML",
-  family = tw(link = "log")
-)
-
-TN_S <- gam(
-  TN ~ s(year, River_section, bs = "fs", m = 2) +
-    s(Data_source, bs = 're') +
-    s(DOY, bs = "tp") +
-    s(Longitude,Latitude, bs = "ds",m = c(1, .5), k = 10) +
-    s(NS_MC, bs = 're') +
-    s(Total_Precip),
-  data = spring,
-  method = "REML",
-  family = tw(link = "log")
-)
-
-TNI <- gam(
-  TN ~ s(year, by = River_section) +
-    s(Data_source, bs = 're') +
-    s(DOY, bs = "tp") +
-    s(Longitude,Latitude, bs = "ds",m = c(1, .5), k = 10) +
-    s(NS_MC, bs = 're') +
-    s(Total_Precip),
-  data = spring,
-  method = "REML",
-  family = tw(link = "log")
-)
-
-TN_G <- gam(
-  TN ~ s(year, k = 10, bs = "tp") +
-    s(Data_source, bs = 're') +
-    s(DOY, bs = "tp") +
-     s(Longitude,Latitude, bs = "ds",m = c(1, .5), k = 10) +
-    s(NS_MC, bs = 're') +
-    s(Total_Precip),
-  data = spring,
-  method = "REML",
-  family = tw(link = "log")
-)
-
 #compare models
-AIC(TNM1, TNM2, TN_GS, TN_S, TNI, TN_G)
+AIC(TNBM,TNM1, TNM2)
 summary(TNM2)
 ```
 
@@ -988,25 +898,22 @@ k.check(TNM2)
 appraise(TNM2)
 
 #Autocorrelation check:
-par(mar = c(3, 3, 3, 0), mfrow = c(2, 2))
+par(mar = c(3, 3, 3, 0), mfrow = c(1, 2))
 acf(resid(TNM2), lag.max = 36, main = "ACF")
 pacf(resid(TNM2), lag.max = 36, main = "pACF")
 
 #concurvity check:
 concurvity(TNM2, full = TRUE)#if any of the values at worst are higher than 0.8, you want to look at full=FALSE as well.
-concurvity(TNM2, full = FALSE)#Look for the worst-case scenario and see if variables with high values have problematic shapes or confidence intervals.
 ```
 
 Plot TN GAM using gratia
 ```{r TN GAM plots}
-#see all plots
-draw(TNM2)
-
 #Year partial effects at each river section 
 draw(TNM2,select=c(1:5),residuals=FALSE) & theme_bw()
 
 #Year partial effects with long + lat
-draw(TNM2,select=9,residuals=TRUE,continuous_fill = ggplot2::scale_fill_distiller(palette = "PuOr", type = "div")) &
+draw(TNM2,select=9,residuals=TRUE,
+     continuous_fill = ggplot2::scale_fill_distiller(palette = "PuOr", type = "div")) &
   theme_bw()
 
 #Precipitation partial effects 
@@ -1058,7 +965,7 @@ tn_gam_plot<-ggplot(tn_sm_year, aes(x = year, y = est)) +
   theme(legend.position = "none")
 
 tn_gam_plot
-ggsave("TP_year_plot.svg",tn_gam_plot,width=12,height=8,dpi=600)
+ggsave("TN_year_plot.svg",tn_gam_plot,width=12,height=8,dpi=600)
 
 
 tn_sm_year_TI <-
@@ -1136,24 +1043,20 @@ d_tn_LSF <- d_tn_LSF %>%
                          if_else(lower > 0, "inc", "")))
 
 t_year_LSF <- ggplot(tn_sm_year_LSF, aes(x = year, y = est)) +
-  annotate(
-    "rect",
+  annotate("rect",
     xmin = c(2002.136),
     xmax = c(2003.819),
     ymin = -Inf,
     ymax = Inf,
     fill = "purple",
-    alpha = 0.2
-  ) +
-  annotate(
-    "rect",
+    alpha = 0.2 ) +
+  annotate( "rect",
     xmin = c(2008.196),
     xmax = c(2013.920),
     ymin = -Inf,
     ymax = Inf,
     fill = "orange",
-    alpha = 0.2
-  ) +
+    alpha = 0.2 ) +
   geom_ribbon(alpha = 0.5,
               aes(ymin = lower, ymax = upper, fill = "confidence interval")) +
   geom_line(data = tn_sm_year_LSF,
@@ -1170,6 +1073,7 @@ t_year_LSF <- ggplot(tn_sm_year_LSF, aes(x = year, y = est)) +
 tn_temp.gam_sections<-ggarrange(t_year_CA,t_year_LSF,labels=c("A","B"), nrow=2,vjust=0.2)+
   theme(plot.margin = margin(10,1,1,1))
 ggsave("TN_CA.LSF_temporalGAM.svg",tn_temp.gam_sections,dpi=600,height=10,width=12 )
+tn_temp.gam_sections
 
 sm_precip <-
   smooth_estimates(TNM2, smooth = "s(Total_Precip)", dist = 0.05)
@@ -1206,12 +1110,11 @@ TN_precip_plot <- ggplot(sm_precip, aes(x = Total_Precip, y = est)) +
   theme_minimal(base_size = 16) +
   theme(legend.position = "none")
 ggsave("TN_precip_plot.svg",TN_precip_plot,width=12,height=8,dpi=600)
+TN_precip_plot
 ```
 
-
-##Water Quality Interactions
-TP and CHLA
-```{r CHLA~TP relationship}
+## Water Quality Interactions
+```{r CHLA~TP relationship, warning=F, message=F}
 lm1<-lm(log1p(CHLA)~log1p(TP),data=Ac_gov)
 summary(lm1)
 
@@ -1223,7 +1126,7 @@ p1<-p1 +geom_smooth(method=lm,color="blue",fill="#69b3a2", se=TRUE)+
 p1
 ```
 
-```{r TP~TSS relationship}
+```{r TP~TSS relationship, warning=F, message=F}
 lm1<-glm(TP~TSS,data=Nut_precip,family=Gamma(link="log"))
 summary(lm1)
 par(mfrow=c(2,2))
@@ -1240,21 +1143,21 @@ p2<-p2 +geom_smooth(method=lm,color="blue",fill="#69b3a2", se=TRUE)+
 p2
 ```
 
-##Invasive Dreissenid impacts
+## Invasive Dreissenid impacts
 
-```{r pre/post dreissenid analysis}
+```{r pre/post dreissenid analysis, warning=F, message=F}
 #select stations with pre and post invasion data, limit to ice-free season (may-oct) within 10 years of invasion (1991)
-icefree_dreis<-Ac_gov %>%                  # Specify original dataframe
-  filter(month > 4,month<11&Site=="20170010"|Site=="20180011") %>%     # Filter condition
-  group_by(Site,year,River_section,Longitude,Latitude,month) %>%   # Grouping variable(s)
+icefree_dreis<-Ac_gov %>%                
+  filter(month > 4,month<11&Site=="20170010"|Site=="20180011") %>%     
+  group_by(Site,year,River_section,Longitude,Latitude,month) %>%  
   summarise(
     CHLA = mean(CHLA,na.rm=TRUE),
-    TDP = mean(TDP),       # calculate mean of column var in my.df
+    TDP = mean(TDP,na.rm=TRUE),      
     SRP = mean(SRP,na.rm=TRUE),         
     TP = mean(TP,na.rm=TRUE),
-    NH3.4 = mean(NH3.4),
-    NO2.3 = mean(NO2.3),
-    TN = mean(TN)
+    NH3.4 = mean(NH3.4,na.rm=TRUE),
+    NO2.3 = mean(NO2.3,na.rm=TRUE),
+    TN = mean(TN,na.rm=TRUE)
     )
 
 icefree_dreis <- icefree_dreis %>% 
@@ -1271,16 +1174,13 @@ brock<-subset(icefree_dreis,River_section=="BR"&year<2001&year>1980)
 
 MW_king<-wilcox.test(lchltp~invade,data=king)
 MW_king
-pairwise.wilcox.test(king$lchltp, king$year,
-                 p.adjust.method = "BH")
 
 MW_brock<-wilcox.test(lchltp~invade,data=brock)
 MW_brock
-pairwise.wilcox.test(brock$lchltp, brock$year,
-                 p.adjust.method = "BH")
 
 lm1<-lm(log1p(CHLA)~log1p(TP),data=subset(king,invade=="pre"))
 summary(lm1)
+par(mfrow=c(2,2))
 plot(lm1)
 
 lm2<-lm(log1p(CHLA)~log1p(TP),data=subset(king,invade=="post"))
@@ -1296,9 +1196,8 @@ summary(lm4)
 plot(lm4)
 ```
 
-```{r dreissenid anaylsis plots}
-theme2 <-
-  theme(
+```{r dreissenid anaylsis plots,message=F, warning=F}
+theme2 <-  theme(
     axis.title.x = element_blank(),
     axis.title.y = element_text(size = 14),
     axis.text = element_text(size = 12),
@@ -1316,56 +1215,50 @@ p1 <- ggplot(data = king, aes(invade, lchltp, fill = invade)) + geom_boxplot() +
   labs(fill = "Invasion Status") +
   scale_x_discrete(labels = c('Pre', 'Post')) +
   ylim(0, 0.75) +
-  geom_signif(
-    comparisons = list(c("pre", "post")),
+  geom_signif(comparisons = list(c("pre", "post")),
     map_signif_level = TRUE,
-    y_position = 0.6
-  ) +
+    y_position = 0.6 ) +
   theme2 +
   ggtitle("Kingston")
 
-p2 <-
-  ggplot(data = brock, aes(invade, lchltp, fill = invade)) + geom_boxplot() +
+p2 <- ggplot(data = brock, aes(invade, lchltp, fill = invade)) + geom_boxplot() +
   scale_fill_viridis(discrete = TRUE,
                      labels = c("Pre-invasion", "Post-invasion")) +
   labs(fill = "Invasion Status") +
   scale_x_discrete(labels = c('Pre', 'Post')) +
   ylim(0, 0.75) +
-  geom_signif(
-    comparisons = list(c("pre", "post")),
+  geom_signif(comparisons = list(c("pre", "post")),
     map_signif_level = TRUE,
-    y_position = 0.6
-  ) +
+    y_position = 0.6) +
   theme2 +
   ggtitle("Brockville")
 
-
 chl.tp_plot<-ggarrange(p1,p2+ rremove("ylab"), nrow=1,common.legend = TRUE,legend = "right")
 ggsave("chla.tp_boxplot.svg",chl.tp_plot,width=12,height=8,dpi=600)
+chl.tp_plot
 
-
-p4<-ggplot(data=king,aes(log1p(TP*1000),log1p(CHLA)))+geom_point()
-p4<-p4 +geom_smooth(method=lm,color="blue",fill="#69b3a2", se=TRUE)+
+p4<-ggplot(data=king,aes(log1p(TP*1000),log1p(CHLA)))+geom_point()+
+  geom_smooth(method=lm,color="blue",fill="#69b3a2", se=TRUE)+
   theme(axis.title = element_text(size=15),panel.background = element_rect(fill="white"))+
   xlab("log TP (ug*L-1)")+
   ylab("log Chla (ug*L-1)")+
   ylim(0,3.5)+
-  ggtitle("Kingston")
-p4<-p4 + facet_grid(. ~ invade)
+  ggtitle("Kingston") +
+  facet_grid(. ~ invade)
 
-p5<-ggplot(data=brock,aes(log1p(TP*1000),log1p(CHLA)))+geom_point()
-p5<-p5 +geom_smooth(method=lm,color="blue",fill="#69b3a2", se=TRUE)+
+p5<-ggplot(data=brock,aes(log1p(TP*1000),log1p(CHLA)))+geom_point()+
+  geom_smooth(method=lm,color="blue",fill="#69b3a2", se=TRUE)+
   theme(axis.title = element_text(size=15),panel.background = element_rect(fill="white"))+
   xlab("log TP (ug*L-1)")+
   ylab("log Chla (ug*L-1)")+
   ylim(0,3.5)+
-  ggtitle("Brockville")
-p5<-p5 + facet_grid(. ~ invade)
+  ggtitle("Brockville")+
+  facet_grid(. ~ invade)
 
-ggarrange(p1,p2+ rremove("ylab"),p4+ rremove("ylab"),p5,ncol=2,common.legend = TRUE)
+ggarrange(p4,p5+ rremove("ylab"),ncol=2,common.legend = TRUE)
 ```
 
-```{r Annual trends}
+```{r Annual trends,message=F, warning=F}
 uslr<-icefree_dreis %>% 
   filter(year<2001&year>1980)%>% 
     group_by(year,Site,Longitude,Latitude,River_section) %>%   # Grouping variable(s)
@@ -1380,9 +1273,9 @@ uslr<-icefree_dreis %>%
     lchltp=mean(lchltp,na.rm=TRUE)
     )
 
-
-p5<-ggplot(data=uslr,aes(year,lchltp,color=River_section))+geom_point()
-p5<-p5 +geom_smooth(method=loess,se=TRUE)+
+p5<-ggplot(data=uslr,aes(year,lchltp,color=River_section))+
+  geom_point() +
+  geom_smooth(method=loess,se=TRUE)+
   theme(axis.title = element_text(size=15),panel.background = element_rect(fill="white"))+
   xlab("Year")+
   ylab("Log Chla:TP")+
