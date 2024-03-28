@@ -3,9 +3,8 @@ title: "Nutrient Indicator - Great River Rapport"
 author: "Erin Smith"
 date: "2024-03-28"
 output:
-  html_document: default
-  pdf_document: default
   github_document: default
+  html_document: default
 ---
 ```{r, echo = F}
 library(knitr)
