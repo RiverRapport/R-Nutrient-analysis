@@ -1,16 +1,17 @@
 ---
 title: "Nutrient Indicator - Great River Rapport"
 author: "Erin Smith"
-date: "2023-02-28"
+date: "2024-03-28"
 output:
   html_document: default
   pdf_document: default
+  github_document: default
 ---
 ```{r, echo = F}
 library(knitr)
 opts_chunk$set(tidy.opts=list(width.cutoff=80),tidy=TRUE)
 ```
-## Load packages and prep data
+## Load packages
 
 ```{r Load Packages, warning=FALSE, error=FALSE,tidy=TRUE,message=FALSE}
 library(Kendall)
@@ -46,7 +47,7 @@ library(formatR)
 library(FSA)
 ```
 
-##Load dataframes and format data
+## Load dataframes and format data
 ```{r Load and prepare data, warning=F,message=F}
 GN<-read.csv("Gov_nut_data_depth.csv",header=TRUE)
 
@@ -87,7 +88,7 @@ Nut_precip <- Nut_precip %>%
     ),
     cont_year = decimal_date(Sample_date)
   )
-head(Nut_precip)
+
 write.csv(Nut_precip, "USLR_nutrients.csv", row.names = FALSE)
 
 Meta_data <- Nut_precip %>%
@@ -111,7 +112,10 @@ GLIP_Ann <- GLIP_USGS %>%
 
 write.csv(GLIP_Ann, "TP_TI.BR.CA_Annual.csv", row.names = F)
 ```
-## Nutrient species Correlation Matrix
+## Nutrient Analysis
+
+### Correlation Matrix
+
 ```{r Correlation matrix, message=F}
 res <-
   cor(Nut_precip[, c(15, 16, 18, 23, 24, 20)], use = 'pairwise.complete.obs')
@@ -147,8 +151,7 @@ Avg <- Nut_precip %>%
 write.csv(Avg, "Avg_TP_USLR.csv", row.names = F)
 ```
 
-
-### Exploratory analysis  By Depth
+### Nutrients by Depth
 
 ```{r Kruskal Wallis for depth,warning=F}
 TP_aov<-aov(TP~NS_MC,data=Nut_precip)
@@ -156,14 +159,6 @@ par(mfrow=c(2,2))
 plot(TP_aov)
 
 kruskal.test(TN~NS_MC,data=Nut_precip)
-
-group_by(Nut_precip, NS_MC) %>%
-  summarise(
-    meanTP = mean(TP, na.rm = TRUE),
-    meanSRP = mean(SRP, na.rm = TRUE),
-    medianTP = median(TP, na.rm = TRUE),
-    medianSRP = median(SRP, na.rm = TRUE)
-  )
 
 p1 <- ggplot(data = Nut_precip, aes(NS_MC, TN, fill = NS_MC)) + geom_boxplot() +
   xlab("Depth") +
@@ -178,7 +173,7 @@ p1 <- ggplot(data = Nut_precip, aes(NS_MC, TN, fill = NS_MC)) + geom_boxplot() +
   ) +
   geom_signif(comparisons = list(c("MC", "NS")),
               map_signif_level = TRUE)
-p1
+
 ggsave("TN_depth_boxplot.svg",p1,dpi=600,width=10,height=8)
 
 p2<-ggplot(data=Nut_precip,aes(NS_MC,TP,fill=NS_MC))+geom_boxplot()+
@@ -189,10 +184,12 @@ p2<-ggplot(data=Nut_precip,aes(NS_MC,TP,fill=NS_MC))+geom_boxplot()+
   theme(axis.title = element_text(size=15),panel.background = element_rect(fill="white"),axis.text = element_text(size=12),legend.position = "none")+
   geom_signif(comparisons = list(c("MC", "NS")), 
               map_signif_level=TRUE)
-p2
+
 ggsave("TP_depth_boxplot.svg",p2,dpi=600,width=10,height=8)
+
+ggarrange(p1,p2,ncol=2)
 ```
-Kruskal Wallis by River Section
+### Nutrients by River Section
 
 ```{r Kruskal Wallis for river section, warning=F}
 TP_aov<-aov(TP~River_section,data=Nut_precip)
@@ -258,7 +255,7 @@ write.table(SMKresultsP,"Seasonal Mann Kendall_P.txt",sep="\t")
 SMKresultsP
 ```
 
-#### pscore test for breakpoints
+#### Test for breakpoints
 
 ```{r Check for Breakpoints}
 icefree <- Nut_precip %>%
@@ -466,7 +463,7 @@ print(ggplot(icefree, aes(year,icefree[[parameter]])) +
 
 ## Let's Try GAMs
 
-Data exploration  
+### Data exploration  
 
 ```{r Data exploration for GAMs, warning=F, message=F}
 
@@ -474,16 +471,9 @@ for (parameter in c("TP","TN")) {
   hist(Nut_precip[[parameter]],main = paste("Histogram of" , parameter),xlab = parameter)
 }
 #all parameters left skewed
-for (parameter in c("TP","TN")) {
-print(ggplot(Nut_precip,aes(x=year,y=Nut_precip[[parameter]]))+geom_point()+
-  ylab(parameter) )
-print(ggplot(Nut_precip,aes(x=NS_MC,y=Nut_precip[[parameter]]))+geom_point()+
-  ylab(parameter) )
-}
-#Both year and river section need to be included in our model
 ```
 
-### Need to deal with autocorrelation
+### Need to check for autocorrelation
 ```{r Subset and autocorrelation checks,warning=F,message=F}
 #try models for different subsets of the data
 spring<-Nut_precip %>%  
@@ -506,16 +496,14 @@ appraise(TPM1)
 par(mfrow=c(1,2))
 acf(resid(TPM1), lag.max = 36, main = "ACF")
 pacf(resid(TPM1), lag.max = 36, main = "pACF")
-summary(TPM1)
 
 gam_errors <- residuals(TPM1, type = "response")
 error_mod <- auto.arima(gam_errors)
 error_mod
 #check recommended order for AR (p) and/or MA (q)
 checkresiduals(error_mod, theme = theme_bw())
-#suggests p=4 for summer data
 
-#add autoregressive moving average (ARMA)
+#Make base model with gamm
 TPM1_ARMA0<-gamm(TP ~ s(year,k=10, bs="tp")+ s(year,River_section,bs='fs')+ s(River_section,bs="re")+
             s(Data_source,bs="re")+
             s(DOY,bs="tp")+
@@ -531,6 +519,7 @@ arma_res <- auto.arima(resid(TPM1_ARMA0$lme, type = "normalized"),
 arma_res
 #indicates summer model should be p=1, q=1
 
+#add autoregressive moving average (ARMA)
 TPM1_ARMA<-gamm(TP ~ s(year,k=10, bs="tp")+ s(year,River_section,bs='fs')+ s(River_section,bs="re")+
             s(Data_source,bs="re")+
             s(DOY,bs="tp")+
@@ -615,7 +604,7 @@ summary(TPM3)
 ```
 
 
-TP GAM model checking
+### TP GAM model checking
 ```{r TP GAM checking}
 #Basic diagnostics:
 k.check(TPM3)
@@ -639,7 +628,7 @@ draw(TPM3, select = c(1:6), residuals = FALSE) & theme_bw()
 draw(TPM3,  select = 10,  residuals = FALSE,
   continuous_fill = ggplot2::scale_fill_distiller(palette = "PuOr", type = "div")
 )
-draw(TPM3,  select = 11,  residuals = TRUE,
+draw(TPM3,  select = 12,  residuals = TRUE,
   continuous_fill = ggplot2::scale_fill_distiller(
     palette = "PuOr",
     type = "div",
@@ -649,7 +638,7 @@ draw(TPM3,  select = 11,  residuals = TRUE,
 ```
 
 ### Let's customize the plots
-```{r TP GAM plots}
+```{r TP GAM plots, warning=F,message=F}
 #customized partial effect plots
 m2.d <- derivatives(TPM3, term = "s(year)", n = 200)
 m2.d <- m2.d %>%
@@ -752,7 +741,8 @@ p_year_BR<-ggplot(sm_year_BR, aes(x=year,y=est))+
   theme_minimal(base_size = 16)+
   theme(legend.position="none")
 
-ggarrange(p_year_TI,p_year_BR,labels=c("A","B"),nrow=2,vjust=0.2)+
+ggarrange(p_year_TI,p_year_BR,labels=c("Thousand Islands","Brockville Narrows"),
+          nrow=2,vjust=0.2)+
   theme(plot.margin = margin(10,1,1,1))
 
 sm <-
@@ -772,7 +762,7 @@ writeRaster(dfr, 'TP_GAM.tif', overwrite = TRUE)
 ```
 
 ## TN GAMs
-```{r TN GAM model building}
+```{r TN GAM model building, warning=F,message=F}
 #Try base model
 TNM1 <-
   gam(
@@ -791,7 +781,6 @@ appraise(TNM1)
 par(mar = c(3, 3, 3, 0), mfrow = c(2, 2))
 acf(resid(TNM1), lag.max = 36, main = "ACF")
 pacf(resid(TNM1), lag.max = 36, main = "pACF")
-summary(TNM1)
 
 #check if need to account for autocorrelation or moving average
 gam_errors <- residuals(TNM1, type = "response")
@@ -891,7 +880,7 @@ AIC(TNBM,TNM1, TNM2)
 summary(TNM2)
 ```
 
-TN GAM model checking
+### TN GAM model checking
 ```{r TN GAM checking}
 #Basic diagnostics:
 k.check(TNM2)
@@ -906,7 +895,7 @@ pacf(resid(TNM2), lag.max = 36, main = "pACF")
 concurvity(TNM2, full = TRUE)#if any of the values at worst are higher than 0.8, you want to look at full=FALSE as well.
 ```
 
-Plot TN GAM using gratia
+### Plot TN GAM
 ```{r TN GAM plots}
 #Year partial effects at each river section 
 draw(TNM2,select=c(1:5),residuals=FALSE) & theme_bw()
@@ -1070,7 +1059,9 @@ t_year_LSF <- ggplot(tn_sm_year_LSF, aes(x = year, y = est)) +
   theme_minimal(base_size = 16) +
   theme(legend.position = "none")
 
-tn_temp.gam_sections<-ggarrange(t_year_CA,t_year_LSF,labels=c("A","B"), nrow=2,vjust=0.2)+
+tn_temp.gam_sections<-ggarrange(t_year_CA,t_year_LSF,
+                                labels=c("Cornwall","Lake St. Francis"),
+                                nrow=2,vjust=0.2)+
   theme(plot.margin = margin(10,1,1,1))
 ggsave("TN_CA.LSF_temporalGAM.svg",tn_temp.gam_sections,dpi=600,height=10,width=12 )
 tn_temp.gam_sections
